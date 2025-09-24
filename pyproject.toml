@@ -14,6 +14,63 @@ dependencies = []
 "Bug Tracker" = "https://github.com/mattstruble/de-spii/issues"
 "Changelog" = "https://github.com/mattstruble/de-spii/releases"
 
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.4.2"
+hypothesis = "^6.140.2"
+pytest-mock = "^3.15.1"
+pytest-cov = "^7.0.0"
+pytest-xdist = "^3.8.0"
+pytest-timeout = "^2.4.0"
+
+[tool.pytest.ini_options]
+addopts = "-n auto --timeout=300 --cov"
+log_cli_level = "INFO"
+testpaths = ["tests"]
+filterwarnings = [
+  "ignore::DeprecationWarning",
+  "ignore::PendingDeprecationWarning",
+  "ignore::UserWarning",
+]
+
+[tool.skjold]
+report_only = false
+sources = ["pyup", "gemnasium", "osv", "pypa"]
+report_format = "json"
+cache_dir = ".skjold_cache"
+cache_expires = 86400
+verbose = true
+
+[tool.bandit.assert_used]
+skips = ["*/tests/*", "*_test.py", "test_*.py"]
+
+[tool.ruff.lint]
+preview = true
+extend-select = [
+  "ANN", # type annotations for function arguments
+  "D",   # pydocstyle
+  # "DOC", # pydoclint
+  "E",   # pycodestyle
+  "F",   # pyflakes
+  "I",   # isort
+  "PL",  # Pylint
+  "B",   # flake8-bugbear
+  "PT",  # flake8-pytest-style
+  "TID", # flake8-tidy-imports
+  "ERA", # eradicate
+  "C90", # mccabe
+]
+
+ignore = [
+  "D104", # Missing docstring in puglic package
+  "D100", # Missing docstring in public module
+  "D103", # Missing docstring in public function
+  "D101", # Missing docstring in public class
+  "D107", # Missing docstring in __init__
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["D", "PLC2701", "ANN", "PLR2004"]
+
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
