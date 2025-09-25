@@ -56,13 +56,12 @@ class PIISignature(dspy.Signature):
 
 
 class PIILLM(dspy.Module):
-    def __init__(self, local_llm) -> None:
+    def __init__(self, local_lm) -> None:
         self.prompt = dspy.Predict(PIISignature)
-        self.local_llm = local_llm
+        self.prompt.set_lm(local_lm)
 
     def forward(self, text):
-        with dspy.context(lm=self.local_llm):
-            response = self.prompt(text=text)
+        response = self.prompt(text=text)
 
         # Model has a tendency to identify already redacted PII, filter it out
         filtered = [
@@ -77,6 +76,13 @@ class PIILLM(dspy.Module):
 
 
 if __name__ == "__main__":
+    dspy.configure(cache=False)
+
+    dspy.configure_cache(
+        enable_disk_cache=False,
+        enable_memory_cache=False,
+    )
+
     local_lm = dspy.LM(model="ollama/llama3.1:8b", api_key="", max_tokens=4000)
     lm = PIILLM(local_lm)
 
