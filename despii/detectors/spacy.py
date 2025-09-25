@@ -5,7 +5,7 @@ from functools import lru_cache
 
 import spacy
 
-from despii.core import DeSPII
+from despii.core import RedactionContext
 from despii.util import StrEnum, detect_system_lang
 
 
@@ -42,12 +42,13 @@ class Labels(StrEnum):
     WORK_OF_ART = auto()  # Titles of books, songs, etc.
 
 
+# Store label names as plain strings to match spaCy's ent.label_
 _PII_LABELS = {
-    Labels.PERSON,
-    Labels.ORG,
-    Labels.GPE,
-    Labels.DATE,
-    Labels.LOC,
+    Labels.PERSON.value,
+    Labels.ORG.value,
+    Labels.GPE.value,
+    Labels.DATE.value,
+    Labels.LOC.value,
 }
 
 
@@ -107,15 +108,13 @@ def spacy_model() -> spacy.language.Language:
     return _load_spacy_model(model_name)
 
 
-def spacy_pass(despii: DeSPII) -> DeSPII:
+def spacy_pass(ctx: RedactionContext) -> RedactionContext:
     nlp = spacy_model()
-    doc = nlp(despii.text)
+    doc = nlp(ctx.text)
+
     for ent in doc.ents:
         label = ent.label_
-        print(label, _PII_LABELS)
         if label in _PII_LABELS:
-            if ent.text not in despii.pii_map.values():
-                placeholder = despii.create_placeholder(label)
-                despii.pii_map[placeholder] = ent.text
-                despii.text = despii.text.replace(ent.text, placeholder)
-    return despii
+            ctx.redact(ent.text, label)
+
+    return ctx

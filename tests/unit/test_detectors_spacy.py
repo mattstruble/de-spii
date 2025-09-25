@@ -4,7 +4,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from despii.core import DeSPII, reconstruct_text
+from despii.core import RedactionContext
 from despii.detectors import spacy as spacy_mod
 
 
@@ -17,19 +17,25 @@ def make_mock_spacy(entities):
 
     class MockDoc:
         def __init__(self, ents):
-            self.ents = [MockSpan(t, l) for t, l in ents]
+            self.ents = [
+                MockSpan(text_value, label_value) for text_value, label_value in ents
+            ]
 
     class MockLanguage:
         def __call__(self, text):
             # return only spans that actually appear in the text
-            present = [(t, l) for t, l in entities if t in text]
+            present = [
+                (text_value, label_value)
+                for text_value, label_value in entities
+                if text_value in text
+            ]
             return MockDoc(present)
 
     return MockLanguage()
 
 
 @pytest.mark.parametrize(
-    "label,text,entity",
+    ("label", "text", "entity"),
     [
         (spacy_mod.Labels.PERSON, "Alice went home.", ("Alice", "PERSON")),
         (spacy_mod.Labels.ORG, "Work at OpenAI today.", ("OpenAI", "ORG")),
@@ -41,14 +47,11 @@ def make_mock_spacy(entities):
 def test_spacy_replaces_supported_labels(monkeypatch, label, text, entity):
     monkeypatch.setattr(spacy_mod, "spacy_model", lambda: make_mock_spacy([entity]))
 
-    d = DeSPII(text=text, pii_map={})
-    result = spacy_mod.spacy_pass(d)
+    ctx = RedactionContext(text)
+    result = spacy_mod.spacy_pass(ctx)
 
     assert entity[0] not in result.text
-    assert any(v == entity[0] for v in result.pii_map.values())
-
-    reconstructed = reconstruct_text(result.text, result)
-    assert reconstructed == text
+    assert result.unredact(result.text) == text
 
 
 def test_spacy_ignores_unsupported_labels(monkeypatch):
@@ -56,25 +59,23 @@ def test_spacy_ignores_unsupported_labels(monkeypatch):
     text = "The word blue appears."
     monkeypatch.setattr(spacy_mod, "spacy_model", lambda: make_mock_spacy([entity]))
 
-    d = DeSPII(text=text, pii_map={})
-    result = spacy_mod.spacy_pass(d)
+    ctx = RedactionContext(text)
+    result = spacy_mod.spacy_pass(ctx)
 
     assert result.text == text
-    assert result.pii_map == {}
-    assert result.count == 0
 
 
 @given(st.text(min_size=0, max_size=200))
 def test_spacy_reconstruction_invariant(text):
     # No entities detected -> identity transform is still reconstructable
     with mock.patch.object(spacy_mod, "spacy_model", return_value=make_mock_spacy([])):
-        d = DeSPII(text=text, pii_map={})
-        result = spacy_mod.spacy_pass(d)
-        assert reconstruct_text(result.text, result) == text
+        ctx = RedactionContext(text)
+        result = spacy_mod.spacy_pass(ctx)
+        assert result.unredact(result.text) == text
 
 
 @pytest.mark.parametrize(
-    "lang,expected",
+    ("lang", "expected"),
     [
         ("en", "en_core_web_sm"),
         ("fr", "fr_core_news_sm"),

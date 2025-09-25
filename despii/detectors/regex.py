@@ -1,6 +1,6 @@
 import re
 
-from despii.core import DeSPII
+from despii.core import RedactionContext
 
 REGEX_PATTERNS = {
     "EMAIL": re.compile(r"\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[A-Za-z]{2,}\b"),
@@ -21,12 +21,9 @@ REGEX_PATTERNS = {
 }
 
 
-def regex_pass(despii: DeSPII) -> DeSPII:
+def regex_pass(ctx: RedactionContext) -> RedactionContext:
     for label, pattern in REGEX_PATTERNS.items():
-        for match in pattern.findall(despii.text):
-            if match not in despii.pii_map.values():
-                placeholder = despii.create_placeholder(label)
-                despii.pii_map[placeholder] = match
-                despii.text = despii.text.replace(match, placeholder)
+        for match in pattern.findall(ctx.text):
+            ctx.redact(match, label)
 
-    return despii
+    return ctx

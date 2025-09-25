@@ -1,8 +1,10 @@
+import re
+
 import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from despii.core import DeSPII, reconstruct_text
+from despii.core import RedactionContext
 from despii.detectors.regex import REGEX_PATTERNS, regex_pass
 
 PII_STRATEGIES = {}
@@ -14,12 +16,10 @@ for label, pattern in REGEX_PATTERNS.items():
 def test_no_pii_text():
     """Test with text containing no PII."""
     text = "This is normal text with no sensitive information."
-    despii = DeSPII(text=text, pii_map={})
-    result = regex_pass(despii)
+    ctx = RedactionContext(text)
+    result = regex_pass(ctx)
 
     assert result.text == text
-    assert result.pii_map == {}
-    assert result.count == 0
 
 
 @pytest.mark.parametrize("pii_type", list(PII_STRATEGIES.keys()))
@@ -29,63 +29,55 @@ def test_pii_detection_and_reconstruction(pii_type, data):
     pii_value = data.draw(PII_STRATEGIES[pii_type])
     text = f"Here is some PII: {pii_value} in the text."
 
-    despii = DeSPII(text=text, pii_map={})
-    result = regex_pass(despii)
+    ctx = RedactionContext(text)
+    result = regex_pass(ctx)
 
     # PII should be replaced
     assert pii_value not in result.text
-    assert len(result.pii_map) == 1
-    assert pii_value in result.pii_map.values()
 
     # Text should be reconstructable
-    reconstructed = reconstruct_text(result.text, result)
-    assert reconstructed == text
+    assert result.unredact(result.text) == text
 
 
 def test_duplicate_pii_handling():
     """Test that duplicate PII values share the same placeholder."""
     text = "Email me at test@example.com or test@example.com"
-    despii = DeSPII(text=text, pii_map={})
-    result = regex_pass(despii)
+    ctx = RedactionContext(text)
+    result = regex_pass(ctx)
 
-    # Only one mapping for the duplicate email
-    assert len(result.pii_map) == 1
-    assert "test@example.com" in result.pii_map.values()
+    # Only one unique placeholder appears twice
+    placeholders = re.findall(r"<PII_[A-Z_]+_\d+>", result.text)
+    assert len(set(placeholders)) == 1
+    assert result.text.count(list(set(placeholders))[0]) == 2
     assert "test@example.com" not in result.text
 
     # Should reconstruct correctly
-    reconstructed = reconstruct_text(result.text, result)
-    assert reconstructed == text
+    assert result.unredact(result.text) == text
 
 
 def test_multiple_pii_types():
     """Test handling multiple different PII types."""
     text = "Contact john@example.com or call 555-123-4567 from server 192.168.1.1"
-    despii = DeSPII(text=text, pii_map={})
-    result = regex_pass(despii)
+    ctx = RedactionContext(text)
+    result = regex_pass(ctx)
 
-    # Should detect all three PII items
-    assert len(result.pii_map) == 3
+    # Should detect all three PII items -> three unique placeholders
+    print(result.text)
+    placeholders = set(re.findall(r"<PII_[A-Z_\d]+_\d+>", result.text))
+    assert len(placeholders) == 3
 
     # Should reconstruct correctly
-    reconstructed = reconstruct_text(result.text, result)
-    assert reconstructed == text
+    assert result.unredact(result.text) == text
 
 
 @given(st.text(max_size=500))
 def test_reconstruction_invariant(text):
     """Property test: any text should be perfectly reconstructable."""
-    despii = DeSPII(text=text, pii_map={})
-    result = regex_pass(despii)
+    ctx = RedactionContext(text)
+    result = regex_pass(ctx)
 
     # Core invariant: reconstruction always works
-    reconstructed = reconstruct_text(result.text, result)
-    assert reconstructed == text
-
-    # Basic sanity checks
-    assert isinstance(result.count, int)
-    assert result.count >= 0
-    assert len(result.pii_map) == result.count
+    assert result.unredact(result.text) == text
 
 
 if __name__ == "__main__":
