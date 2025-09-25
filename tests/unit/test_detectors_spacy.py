@@ -129,3 +129,14 @@ def test_spacy_download_fallback_on_missing_model(monkeypatch):
     assert "spacy" in cmd
     assert "download" in cmd
     assert "en_core_web_sm" in cmd
+
+
+@settings(suppress_health_check=[HealthCheck.function_scoped_fixture])
+@given(st.text(max_size=200))
+def test_detector_does_not_crash_on_arbitrary_text(ctx_factory, text):
+    """Detector should not raise on arbitrary input; redact calls optional."""
+    ctx = ctx_factory(text)
+
+    _ = spacy_mod.spacy_pass(ctx)
+
+    ctx.redact.assert_not_called()

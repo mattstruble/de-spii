@@ -70,6 +70,8 @@ def test_detector_does_not_crash_on_arbitrary_text(ctx_factory, text):
 
     _ = regex_pass(ctx)
 
+    ctx.redact.assert_not_called()
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
