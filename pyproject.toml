@@ -51,6 +51,9 @@ verbose = true
 [tool.bandit.assert_used]
 skips = ["*/tests/*", "*_test.py", "test_*.py"]
 
+[tool.ruff]
+line-length = 120
+
 [tool.ruff.lint]
 preview = true
 extend-select = [
