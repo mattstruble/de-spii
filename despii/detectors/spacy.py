@@ -1,12 +1,12 @@
 import subprocess  # nosec B404
 import sys
-from enum import StrEnum, auto
+from enum import auto
 from functools import lru_cache
 
 import spacy
 
 from despii.core import DeSPII
-from despii.util import detect_system_lang
+from despii.util import StrEnum, detect_system_lang
 
 
 class Labels(StrEnum):
@@ -40,6 +40,15 @@ class Labels(StrEnum):
     QUANTITY = auto()  # Measurements, as of weight or distance
     TIME = auto()  # Times smaller than a day
     WORK_OF_ART = auto()  # Titles of books, songs, etc.
+
+
+_PII_LABELS = {
+    Labels.PERSON,
+    Labels.ORG,
+    Labels.GPE,
+    Labels.DATE,
+    Labels.LOC,
+}
 
 
 @lru_cache(maxsize=1)
@@ -103,8 +112,10 @@ def spacy_pass(despii: DeSPII) -> DeSPII:
     doc = nlp(despii.text)
     for ent in doc.ents:
         label = ent.label_
-        if label in {Labels.PERSON, Labels.ORG, Labels.GPE, Labels.DATE, Labels.LOC}:
+        print(label, _PII_LABELS)
+        if label in _PII_LABELS:
             if ent.text not in despii.pii_map.values():
                 placeholder = despii.create_placeholder(label)
                 despii.pii_map[placeholder] = ent.text
                 despii.text = despii.text.replace(ent.text, placeholder)
+    return despii
