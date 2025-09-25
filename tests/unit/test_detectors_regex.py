@@ -1,8 +1,7 @@
 import pytest
-from hypothesis import given
+from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
-from despii.core import DeSPII, reconstruct_text
 from despii.detectors.regex import REGEX_PATTERNS, regex_pass
 
 PII_STRATEGIES = {}
@@ -11,81 +10,65 @@ for label, pattern in REGEX_PATTERNS.items():
     PII_STRATEGIES[label] = st.from_regex(pattern, fullmatch=True)
 
 
-def test_no_pii_text():
-    """Test with text containing no PII."""
+def test_no_pii_text(ctx_factory):
+    """Detector should not call redact when no PII present."""
     text = "This is normal text with no sensitive information."
-    despii = DeSPII(text=text, pii_map={})
-    result = regex_pass(despii)
+    ctx = ctx_factory(text)
 
-    assert result.text == text
-    assert result.pii_map == {}
-    assert result.count == 0
+    _ = regex_pass(ctx)
+    ctx.redact.assert_not_called()
 
 
 @pytest.mark.parametrize("pii_type", list(PII_STRATEGIES.keys()))
+@settings(suppress_health_check=[HealthCheck.function_scoped_fixture])
 @given(st.data())
-def test_pii_detection_and_reconstruction(pii_type, data):
+def test_pii_detection_and_reconstruction(ctx_factory, pii_type, data):
     """Test that PII is detected, replaced, and reconstructable for each type."""
     pii_value = data.draw(PII_STRATEGIES[pii_type])
     text = f"Here is some PII: {pii_value} in the text."
 
-    despii = DeSPII(text=text, pii_map={})
-    result = regex_pass(despii)
+    ctx = ctx_factory(text)
 
-    # PII should be replaced
-    assert pii_value not in result.text
-    assert len(result.pii_map) == 1
-    assert pii_value in result.pii_map.values()
+    _ = regex_pass(ctx)
 
-    # Text should be reconstructable
-    reconstructed = reconstruct_text(result.text, result)
-    assert reconstructed == text
+    # At least one call matches the detected value and its label
+    assert any(call.args == (pii_value, pii_type) for call in ctx.redact.call_args_list)
 
 
-def test_duplicate_pii_handling():
-    """Test that duplicate PII values share the same placeholder."""
+def test_duplicate_pii_handling_calls_redact_twice(ctx_factory):
+    """Detector should call redact for each occurrence found by regex."""
     text = "Email me at test@example.com or test@example.com"
-    despii = DeSPII(text=text, pii_map={})
-    result = regex_pass(despii)
+    ctx = ctx_factory(text)
 
-    # Only one mapping for the duplicate email
-    assert len(result.pii_map) == 1
-    assert "test@example.com" in result.pii_map.values()
-    assert "test@example.com" not in result.text
+    _ = regex_pass(ctx)
 
-    # Should reconstruct correctly
-    reconstructed = reconstruct_text(result.text, result)
-    assert reconstructed == text
+    redact_calls = [
+        c.args for c in ctx.redact.call_args_list if c.args[0] == "test@example.com"
+    ]
+    assert len(redact_calls) == 2
+    assert all(args[1] == "EMAIL" for args in redact_calls)
 
 
-def test_multiple_pii_types():
-    """Test handling multiple different PII types."""
+def test_multiple_pii_types_calls_with_expected_labels(ctx_factory):
+    """Detector should call redact with correct labels for different PII."""
     text = "Contact john@example.com or call 555-123-4567 from server 192.168.1.1"
-    despii = DeSPII(text=text, pii_map={})
-    result = regex_pass(despii)
+    ctx = ctx_factory(text)
 
-    # Should detect all three PII items
-    assert len(result.pii_map) == 3
+    _ = regex_pass(ctx)
 
-    # Should reconstruct correctly
-    reconstructed = reconstruct_text(result.text, result)
-    assert reconstructed == text
+    calls = [(c.args[0], c.args[1]) for c in ctx.redact.call_args_list]
+    assert ("john@example.com", "EMAIL") in calls
+    assert ("555-123-4567", "PHONE_US") in calls
+    assert ("192.168.1.1", "IPV4") in calls
 
 
+@settings(suppress_health_check=[HealthCheck.function_scoped_fixture])
 @given(st.text(max_size=500))
-def test_reconstruction_invariant(text):
-    """Property test: any text should be perfectly reconstructable."""
-    despii = DeSPII(text=text, pii_map={})
-    result = regex_pass(despii)
+def test_detector_does_not_crash_on_arbitrary_text(ctx_factory, text):
+    """Detector should not raise on arbitrary input; redact calls optional."""
+    ctx = ctx_factory(text)
 
-    # Core invariant: reconstruction always works
-    reconstructed = reconstruct_text(result.text, result)
-    assert reconstructed == text
-
-    # Basic sanity checks
-    assert isinstance(result.count, int)
-    assert result.count >= 0
-    assert len(result.pii_map) == result.count
+    _ = regex_pass(ctx)
 
 
 if __name__ == "__main__":

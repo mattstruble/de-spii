@@ -1,10 +1,9 @@
 from unittest import mock
 
 import pytest
-from hypothesis import given
+from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
-from despii.core import DeSPII, reconstruct_text
 from despii.detectors import spacy as spacy_mod
 
 
@@ -17,19 +16,25 @@ def make_mock_spacy(entities):
 
     class MockDoc:
         def __init__(self, ents):
-            self.ents = [MockSpan(t, l) for t, l in ents]
+            self.ents = [
+                MockSpan(text_value, label_value) for text_value, label_value in ents
+            ]
 
     class MockLanguage:
         def __call__(self, text):
             # return only spans that actually appear in the text
-            present = [(t, l) for t, l in entities if t in text]
+            present = [
+                (text_value, label_value)
+                for text_value, label_value in entities
+                if text_value in text
+            ]
             return MockDoc(present)
 
     return MockLanguage()
 
 
 @pytest.mark.parametrize(
-    "label,text,entity",
+    ("label", "text", "entity"),
     [
         (spacy_mod.Labels.PERSON, "Alice went home.", ("Alice", "PERSON")),
         (spacy_mod.Labels.ORG, "Work at OpenAI today.", ("OpenAI", "ORG")),
@@ -38,43 +43,38 @@ def make_mock_spacy(entities):
         (spacy_mod.Labels.LOC, "Meet at Central Park.", ("Central Park", "LOC")),
     ],
 )
-def test_spacy_replaces_supported_labels(monkeypatch, label, text, entity):
+def test_spacy_replaces_supported_labels(ctx_factory, monkeypatch, label, text, entity):
     monkeypatch.setattr(spacy_mod, "spacy_model", lambda: make_mock_spacy([entity]))
 
-    d = DeSPII(text=text, pii_map={})
-    result = spacy_mod.spacy_pass(d)
+    ctx = ctx_factory(text)
 
-    assert entity[0] not in result.text
-    assert any(v == entity[0] for v in result.pii_map.values())
-
-    reconstructed = reconstruct_text(result.text, result)
-    assert reconstructed == text
+    _ = spacy_mod.spacy_pass(ctx)
+    ctx.redact.assert_any_call(entity[0], entity[1])
 
 
-def test_spacy_ignores_unsupported_labels(monkeypatch):
+def test_spacy_ignores_unsupported_labels(ctx_factory, monkeypatch):
     entity = ("blue", "LANGUAGE")
     text = "The word blue appears."
     monkeypatch.setattr(spacy_mod, "spacy_model", lambda: make_mock_spacy([entity]))
 
-    d = DeSPII(text=text, pii_map={})
-    result = spacy_mod.spacy_pass(d)
+    ctx = ctx_factory(text)
 
-    assert result.text == text
-    assert result.pii_map == {}
-    assert result.count == 0
+    _ = spacy_mod.spacy_pass(ctx)
+    ctx.redact.assert_not_called()
 
 
+@settings(suppress_health_check=[HealthCheck.function_scoped_fixture])
 @given(st.text(min_size=0, max_size=200))
-def test_spacy_reconstruction_invariant(text):
-    # No entities detected -> identity transform is still reconstructable
+def test_spacy_no_entities_calls_no_redact(ctx_factory, text):
+    # No entities detected -> redact should not be called
     with mock.patch.object(spacy_mod, "spacy_model", return_value=make_mock_spacy([])):
-        d = DeSPII(text=text, pii_map={})
-        result = spacy_mod.spacy_pass(d)
-        assert reconstruct_text(result.text, result) == text
+        ctx = ctx_factory(text)
+        _ = spacy_mod.spacy_pass(ctx)
+        ctx.redact.assert_not_called()
 
 
 @pytest.mark.parametrize(
-    "lang,expected",
+    ("lang", "expected"),
     [
         ("en", "en_core_web_sm"),
         ("fr", "fr_core_news_sm"),
@@ -103,3 +103,29 @@ def test_spacy_model_loads_selected_package(monkeypatch):
 
     _ = spacy_mod.spacy_model()
     assert captured.get("name") == "en_core_web_sm"
+
+
+def test_spacy_download_fallback_on_missing_model(monkeypatch):
+    # Ensure we exercise the try/except path in _load_spacy_model
+    spacy_mod._load_spacy_model.cache_clear()
+
+    sentinel_model = object()
+
+    # First call raises, second returns a model object
+    load_mock = mock.Mock()
+    load_mock.side_effect = [Exception("missing"), sentinel_model]
+    monkeypatch.setattr(spacy_mod.spacy, "load", load_mock)
+
+    check_call_mock = mock.Mock(return_value=0)
+    monkeypatch.setattr(spacy_mod.subprocess, "check_call", check_call_mock)
+
+    model = spacy_mod._load_spacy_model("en_core_web_sm")
+    assert model is sentinel_model
+
+    # Verify we attempted to download exactly once
+    assert check_call_mock.call_count == 1
+    args, _ = check_call_mock.call_args
+    cmd = args[0]
+    assert "spacy" in cmd
+    assert "download" in cmd
+    assert "en_core_web_sm" in cmd
