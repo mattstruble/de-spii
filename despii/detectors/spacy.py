@@ -44,11 +44,11 @@ class Labels(StrEnum):
 
 # Store label names as plain strings to match spaCy's ent.label_
 _PII_LABELS = {
-    Labels.PERSON.value,
-    Labels.ORG.value,
-    Labels.GPE.value,
-    Labels.DATE.value,
-    Labels.LOC.value,
+    Labels.PERSON,
+    Labels.ORG,
+    Labels.GPE,
+    Labels.DATE,
+    Labels.LOC,
 }
 
 
