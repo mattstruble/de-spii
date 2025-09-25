@@ -32,6 +32,9 @@ filterwarnings = [
   "ignore::UserWarning",
 ]
 
+[tool.coverage.run]
+omit = ["tests/*"]
+
 [tool.skjold]
 report_only = false
 sources = ["pyup", "gemnasium", "osv", "pypa"]
