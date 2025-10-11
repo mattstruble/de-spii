@@ -43,6 +43,7 @@ class PIISignature(dspy.Signature):
     - Occupation - job title, or role
     - Date - Absolute or relative dates or periods
     - Org - Companies, agencies, instiutions, etc
+    - Secret - API key, access token, or password (e.g., aws token, gcp token, openai key, etc)
 
     Span Rules:
     ----------
@@ -77,6 +78,9 @@ class PIISignature(dspy.Signature):
 
     text: "My name is Alice Chen and my phone number is 555-123-4567"
     output: [{"pii_str": "Alice Chen", "label": "Name"}, {"pii_str": "555-123-4567", "label": "Phone"}]
+
+    text: "Help me debug this query https://mestruble:foobar@github.com is returning null."
+    output:  [{"pii_str": "mestruble", "Username": "Name"}, {"pii_str": "foobar", "label": "Secret"}]
 
     """
 
