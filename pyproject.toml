@@ -83,7 +83,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["D", "PLC2701", "ANN", "PLR2004"]
+"tests/*" = ["D", "PLC2701", "ANN", "PLR2004", "PLR6301"]
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]

@@ -4,7 +4,9 @@ import asyncio
 import contextvars
 import copy
 import threading
+from collections.abc import Generator
 from contextlib import contextmanager
+from typing import Any
 
 DEFAULT_CONFIG = dict(
     local_lm=None,
@@ -18,7 +20,9 @@ config_owner_async_task = None
 # Global lock for settings configuration
 global_lock = threading.Lock()
 
-thread_local_overrides = contextvars.ContextVar("context_overrides", default=dict())
+thread_local_overrides: contextvars.ContextVar[dict[str, Any]] = contextvars.ContextVar(
+    "context_overrides", default=None
+)
 
 
 class Settings:
@@ -33,22 +37,23 @@ class Settings:
       2. It affects a global state, visible to all. As a result, user threads work, but they shouldn't be
          mixed with concurrent changes to dspy.configure from the "main" thread.
          (TODO: In the future, add warnings: if there are near-in-time user-thread reads followed by .configure calls.)
-      3. Any thread can use dspy.context. It propagates to child threads created with DSPy primitives: Parallel, asyncify, etc.
+      3. Any thread can use dspy.context. It propagates to child threads
+         created with DSPy primitives: Parallel, asyncify, etc.
     """
 
     _instance = None
 
-    def __new__(cls):
+    def __new__(cls) -> "Settings":  # noqa: D102
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cls._instance
 
     @property
-    def lock(self):
+    def lock(self) -> threading.Lock:  # noqa: D102
         return global_lock
 
-    def __getattr__(self, name):
-        overrides = thread_local_overrides.get()
+    def __getattr__(self, name: str) -> Any:  # noqa: D105, ANN401
+        overrides = thread_local_overrides.get() or {}
         if name in overrides:
             return overrides[name]
         elif name in main_thread_config:
@@ -56,38 +61,38 @@ class Settings:
         else:
             raise AttributeError(f"'Settings' object has no attribute '{name}'")
 
-    def __setattr__(self, name, value):
-        if name in ("_instance",):
+    def __setattr__(self, name: str, value: Any) -> None:  # noqa: D105, ANN401
+        if name in {"_instance"}:
             super().__setattr__(name, value)
         else:
             self.configure(**{name: value})
 
-    def __getitem__(self, key):
+    def __getitem__(self, key: str) -> Any:  # noqa: D105, ANN401
         return self.__getattr__(key)
 
-    def __setitem__(self, key, value):
+    def __setitem__(self, key: str, value: Any) -> None:  # noqa: D105, ANN401
         self.__setattr__(key, value)
 
-    def __contains__(self, key):
-        overrides = thread_local_overrides.get()
+    def __contains__(self, key: str) -> bool:  # noqa: D105
+        overrides = thread_local_overrides.get() or {}
         return key in overrides or key in main_thread_config
 
-    def get(self, key, default=None):
+    def get(self, key: str, default: Any = None) -> Any:  # noqa: D102, ANN401
         try:
             return self[key]
         except AttributeError:
             return default
 
-    def copy(self):
-        overrides = thread_local_overrides.get()
+    def copy(self) -> dict[str, Any]:  # noqa: D102, PLR6301
+        overrides = thread_local_overrides.get() or {}
         return dict({**main_thread_config, **overrides})
 
     @property
-    def config(self):
+    def config(self) -> dict[str, Any]:  # noqa: D102
         return self.copy()
 
-    def _ensure_configure_allowed(self):
-        global main_thread_config, config_owner_thread_id, config_owner_async_task
+    def _ensure_configure_allowed(self) -> None:  # noqa: PLR6301
+        global config_owner_thread_id, config_owner_async_task  # noqa: PLW0603
         current_thread_id = threading.get_ident()
 
         if config_owner_thread_id is None:
@@ -119,12 +124,12 @@ class Settings:
         # We are in an async task. Now check for IPython and allow calling `configure` from IPython.
         in_ipython = False
         try:
-            from IPython import get_ipython
+            from IPython import get_ipython  # noqa: PLC0415
 
             # get_ipython is a global injected by IPython environments.
             # We check its existence and type to be more robust.
             in_ipython = get_ipython() is not None
-        except Exception:
+        except Exception:  # noqa: BLE001
             # If `IPython` is not installed or `get_ipython` failed, we are not in an IPython environment.
             in_ipython = False
 
@@ -134,7 +139,7 @@ class Settings:
                 "use `dspy.context(...)` in other async tasks instead."
             )
 
-    def configure(self, **kwargs):
+    def configure(self, **kwargs: Any) -> None:  # noqa: D102, ANN401
         # If no exception is raised, the `configure` call is allowed.
         self._ensure_configure_allowed()
 
@@ -143,12 +148,12 @@ class Settings:
             main_thread_config[k] = v
 
     @contextmanager
-    def context(self, **kwargs):
+    def context(self, **kwargs: Any) -> Generator[None, None, None]:  # noqa: ANN401, PLR6301
         """Context manager for temporary configuration changes at the thread level.
         Does not affect global configuration. Changes only apply to the current thread.
         If threads are spawned inside this block using ParallelExecutor, they will inherit these overrides.
         """
-        original_overrides = thread_local_overrides.get().copy()
+        original_overrides = (thread_local_overrides.get() or {}).copy()
         new_overrides = dict({**main_thread_config, **original_overrides, **kwargs})
         token = thread_local_overrides.set(new_overrides)
 
@@ -157,8 +162,8 @@ class Settings:
         finally:
             thread_local_overrides.reset(token)
 
-    def __repr__(self):
-        overrides = thread_local_overrides.get()
+    def __repr__(self) -> str:  # noqa: D105
+        overrides = thread_local_overrides.get() or {}
         combined_config = {**main_thread_config, **overrides}
         return repr(combined_config)
 

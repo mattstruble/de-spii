@@ -6,7 +6,9 @@
 
 **Privacy middleware for DSPy and LLM pipelines.**
 
-De-spii is a Python package for detecting and redacting Personally Identifiable Information (PII) from user prompts before they are sent to cloud-based LLMs. It ensures privacy by stripping sensitive data locally, forwarding redacted queries upstream, and then reconstructing the original content from placeholders after the response.
+De-spii is a Python package for detecting and redacting Personally Identifiable Information (PII) from user prompts
+before they are sent to cloud-based LLMs. It ensures privacy by stripping sensitive data locally, forwarding redacted
+queries upstream, and then reconstructing the original content from placeholders after the response.
 
 ---
 
