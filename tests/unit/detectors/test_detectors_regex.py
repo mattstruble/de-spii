@@ -2,7 +2,7 @@ import pytest
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
-from despii.detectors.regex import REGEX_PATTERNS, regex_pass
+from despii.detectors.regex_detector import REGEX_PATTERNS, regex_pass
 
 PII_STRATEGIES = {}
 

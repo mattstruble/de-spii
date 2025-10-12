@@ -8,7 +8,11 @@ authors = [
 license = { text = "MIT" }
 readme = "README.md"
 requires-python = ">=3.10, <3.14"
-dependencies = ["spacy (>=3.8.7,<4.0.0)", "detect-secrets (>=1.5.0,<2.0.0)"]
+dependencies = [
+  "spacy (>=3.8.7,<4.0.0)",
+  "detect-secrets (>=1.5.0,<2.0.0)",
+  "pydantic (>=2.11.9,<3.0.0)",
+]
 
 [tool.poetry.urls]
 "Bug Tracker" = "https://github.com/mattstruble/de-spii/issues"
@@ -21,6 +25,9 @@ pytest-mock = "^3.15.1"
 pytest-cov = "^7.0.0"
 pytest-xdist = "^3.8.0"
 pytest-timeout = "^2.4.0"
+dspy = "^3.0.3"
+langchain = "^0.3.27"
+langgraph = "^0.6.10"
 
 [tool.pytest.ini_options]
 addopts = "-n auto --timeout=300 --cov"
@@ -46,6 +53,9 @@ verbose = true
 [tool.bandit.assert_used]
 skips = ["*/tests/*", "*_test.py", "test_*.py"]
 
+[tool.ruff]
+line-length = 120
+
 [tool.ruff.lint]
 preview = true
 extend-select = [
@@ -69,10 +79,11 @@ ignore = [
   "D103", # Missing docstring in public function
   "D101", # Missing docstring in public class
   "D107", # Missing docstring in __init__
+  "D205",
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["D", "PLC2701", "ANN", "PLR2004"]
+"tests/*" = ["D", "PLC2701", "ANN", "PLR2004", "PLR6301"]
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]

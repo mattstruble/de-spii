@@ -1,4 +1,7 @@
+import re
 from collections import defaultdict
+
+PLACEHOLDER_PATTERN = re.compile(r"^<PII_[A-Z_\d]+_\d>$")
 
 
 class RedactionContext:
@@ -24,6 +27,12 @@ class RedactionContext:
         :param pii: PII string to be redacted.
         :param label: The type of PII (e.g., 'EMAIL', 'PHONE', 'SSN')
         """
+        if PLACEHOLDER_PATTERN.match(pii):
+            return
+
+        if len(pii) == 0 or len(label) == 0:
+            return
+
         if pii not in self._pii_map.values():
             label = label.upper()
             placeholder = self._create_placeholder(label)

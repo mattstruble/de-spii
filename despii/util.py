@@ -26,15 +26,16 @@ def detect_system_lang() -> Optional[str]:
     :return: a two-letter language code (e.g., 'en', 'fr') or None if unknown.
     """
     lang = os.environ.get("LANG")
+    min_lang_code_length = 2
     if lang:
         code = lang.split(".")[0].split("_")[0]
-        if len(code) >= 2:
-            return code[:2].lower()
+        if len(code) >= min_lang_code_length:
+            return code[:min_lang_code_length].lower()
 
     loc = locale.getdefaultlocale()[0]
     if loc:
         code = str(loc).split("_")[0]
-        if len(code) >= 2:
-            return code[:2].lower()
+        if len(code) >= min_lang_code_length:
+            return code[:min_lang_code_length].lower()
 
     return None
