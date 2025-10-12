@@ -1,11 +1,15 @@
+import logging
 import re
 from collections import defaultdict
+
+logger = logging.getLogger(__name__)
 
 PLACEHOLDER_PATTERN = re.compile(r"^<PII_[A-Z_\d]+_\d>$")
 
 
 class RedactionContext:
     def __init__(self, text: str) -> None:
+        logger.debug("Creating RedactionContext (text length: %d chars)", len(text))
         self.text: str = text
         self._pii_map: dict[str, str] = {}
         self._label_count: dict[str, int] = defaultdict(int)
@@ -28,9 +32,11 @@ class RedactionContext:
         :param label: The type of PII (e.g., 'EMAIL', 'PHONE', 'SSN')
         """
         if PLACEHOLDER_PATTERN.match(pii):
+            logger.debug("Skipping redaction of existing placeholder: %s", pii)
             return
 
         if len(pii) == 0 or len(label) == 0:
+            logger.debug("Skipping redaction: empty PII or label")
             return
 
         if pii not in self._pii_map.values():
@@ -38,6 +44,7 @@ class RedactionContext:
             placeholder = self._create_placeholder(label)
             self._pii_map[placeholder] = pii
             self.text = self.text.replace(pii, placeholder)
+            logger.debug("Redacted PII with label %s -> %s", label, placeholder)
 
     def unredact(self, text: str) -> str:
         """Replace placeholders in the provided text with the original PII values.
@@ -45,6 +52,7 @@ class RedactionContext:
         :param text: String containing placeholders.
         :return: The text with placeholders replaced by original PII values.
         """
+        logger.debug("Unredacting text with %d placeholder mappings", len(self._pii_map))
         for placeholder, original in self._pii_map.items():
             text = text.replace(placeholder, original)
         return text
