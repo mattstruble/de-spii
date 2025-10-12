@@ -15,3 +15,4 @@ class LangGraphAdapter(LLMAdapter):
 
         text = raw if isinstance(raw, str) else getattr(raw, "content", str(raw))
         return LLMResponse(text=text, raw=raw, framework="langgraph", model_name=getattr(self.model, "name", None))
+
