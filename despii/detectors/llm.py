@@ -1,4 +1,5 @@
 import json
+from typing import Any
 
 import dspy
 from pydantic import BaseModel
@@ -7,6 +8,8 @@ import despii
 from despii.adapters.base import LLMAdapter, LLMRegistry
 from despii.core import RedactionContext
 from despii.settings import settings
+
+_EXAMPLE_URL = "https://mestruble:foobar@github.com"  # pragma: allowlist secret
 
 _PROMPT = """
 You are a helpful assistant that is very mindful of user privacy.
@@ -74,9 +77,13 @@ output: []
 text: My name is Alice Chen and my phone number is 555-123-4567
 output: [{"pii_str": "Alice Chen", "label": "Name"}, {"pii_str": "555-123-4567", "label": "Phone"}]
 
-text: Help me debug this query https://mestruble:foobar@github.com is returning null.
+text: Help me debug this query {{EXAMPLE_URL}} is returning null.
 output:  [{"pii_str": "mestruble", "Username": "Name"}, {"pii_str": "foobar", "label": "Secret"}]
-"""
+
+input:
+------
+text: {{INPUT_TEXT}}
+""".replace("{{EXAMPLE_URL}}", _EXAMPLE_URL)
 
 
 class PIIInfo(BaseModel):
@@ -94,9 +101,10 @@ class PiiLLM:
 
         self.adapter: LLMAdapter = adapter_cls(self.model) if adapter_cls else None
 
-    def generate(self, text: str, **kwargs) -> list[PIIInfo]:
+    def generate(self, text: str, **kwargs: Any) -> list[PIIInfo]:  # noqa: ANN401
+        """Generate PII detections from text."""
         if self.adapter:
-            prompt = _PROMPT + "\n\n" + "input:\n" + "------\n" + f"text: {text}"
+            prompt = _PROMPT.replace("{{INPUT_TEXT}}", text)
             resp = self.adapter.generate(prompt, **kwargs).raw[0]
             parsed_json = json.loads(resp)
 
