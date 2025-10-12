@@ -28,11 +28,16 @@ pytest-timeout = "^2.4.0"
 dspy = "^3.0.3"
 langchain = "^0.3.27"
 langgraph = "^0.6.10"
+langchain-ollama = "^0.2.0"
 
 [tool.pytest.ini_options]
 addopts = "-n auto --timeout=300 --cov"
 log_cli_level = "INFO"
 testpaths = ["tests"]
+markers = [
+  "integration: marks tests as integration tests (require external services like Ollama)",
+  "unit: marks tests as unit tests (fast, no external dependencies)",
+]
 filterwarnings = [
   "ignore::DeprecationWarning",
   "ignore::PendingDeprecationWarning",

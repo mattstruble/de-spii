@@ -151,9 +151,12 @@ class PiiLLM:
         if self.adapter:
             logger.debug("Starting LLM PII detection (text length: %d chars)", len(text))
             prompt = _PROMPT.replace("{{INPUT_TEXT}}", text)
-            resp = self.adapter.generate(prompt, **kwargs).raw[0]
+            resp = self.adapter.generate(prompt, **kwargs).text
+
+            logger.debug("Raw LLM response (first 200 chars): %s...", resp[:200])
 
             cleaned_resp = _clean_llm_response(resp)
+            logger.debug("Cleaned response (first 200 chars): %s...", cleaned_resp[:200])
 
             try:
                 parsed_json = json.loads(cleaned_resp)
@@ -164,9 +167,9 @@ class PiiLLM:
                     logger.debug("Detected PII labels: %s", labels)
                 return pii_items
             except (json.JSONDecodeError, ValueError, TypeError) as e:
-                logger.debug(
+                logger.warning(
                     "Failed to parse LLM response as JSON. Response: %r. Error: %s",
-                    resp,
+                    resp[:500],
                     e,
                 )
                 return []

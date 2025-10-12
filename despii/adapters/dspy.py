@@ -24,6 +24,13 @@ class DSPyAdapter(LLMAdapter):
                 f"DSPy model {type(self.model)} does not implement '__call__' or 'generate_text'."
             )
 
-        text = raw if isinstance(raw, str) else getattr(raw, "text", str(raw))
+        # Extract text - DSPy returns a list of strings, so get the first element
+        if isinstance(raw, str):
+            text = raw
+        elif isinstance(raw, list) and len(raw) > 0:
+            text = raw[0] if isinstance(raw[0], str) else getattr(raw[0], "text", str(raw[0]))
+        else:
+            text = getattr(raw, "text", str(raw))
+
         logger.debug("DSPyAdapter response generated (length: %d chars)", len(text))
         return LLMResponse(text=text, raw=raw, framework="dspy", model_name=getattr(self.model, "model", None))
