@@ -1,3 +1,4 @@
+import functools
 from dataclasses import dataclass
 from typing import Any
 
@@ -50,6 +51,7 @@ class LLMRegistry:
         return cls._registry.get(name.lower())
 
     @classmethod
+    @functools.cache
     def detect(cls, model: Any) -> str | None:  # noqa: ANN401
         """Detect framework from model's module name.
 

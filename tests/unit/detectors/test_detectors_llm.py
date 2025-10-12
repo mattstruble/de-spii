@@ -289,6 +289,119 @@ class TestPiiLLM:
         # Verify all three calls happened
         assert mock_adapter.generate.call_count == 3
 
+    @patch("despii.detectors.llm.settings")
+    @patch("despii.detectors.llm.LLMRegistry")
+    @patch("despii.detectors.llm.logger")
+    def test_generate_handles_invalid_json(self, mock_logger, mock_registry, mock_settings):
+        """Test that generate handles invalid JSON gracefully."""
+        mock_model = Mock()
+        mock_settings.local_lm = mock_model
+
+        # Mock adapter that returns invalid JSON
+        mock_adapter = Mock(spec=LLMAdapter)
+        mock_response = Mock(spec=LLMResponse)
+        mock_response.raw = ["This is not valid JSON"]
+        mock_adapter.generate.return_value = mock_response
+
+        mock_registry.detect.return_value = "dspy"
+        mock_adapter_cls = Mock(return_value=mock_adapter)
+        mock_registry.get_adapter.return_value = mock_adapter_cls
+
+        pii_llm = PiiLLM()
+        result = pii_llm.generate("Test text")
+
+        # Should return empty list instead of raising
+        assert result == []
+
+        # Should log debug message
+        mock_logger.debug.assert_called_once()
+        log_call_args = mock_logger.debug.call_args
+        assert "Failed to parse LLM response as JSON" in log_call_args.args[0]
+        assert "This is not valid JSON" in str(log_call_args.args[1])
+
+    @patch("despii.detectors.llm.settings")
+    @patch("despii.detectors.llm.LLMRegistry")
+    @patch("despii.detectors.llm.logger")
+    def test_generate_handles_markdown_json(self, mock_logger, mock_registry, mock_settings):
+        """Test that generate handles JSON wrapped in markdown code blocks."""
+        mock_model = Mock()
+        mock_settings.local_lm = mock_model
+
+        # Mock adapter that returns JSON in markdown
+        mock_adapter = Mock(spec=LLMAdapter)
+        mock_response = Mock(spec=LLMResponse)
+        mock_response.raw = ['```json\n[{"pii_str": "John", "label": "Name"}]\n```']
+        mock_adapter.generate.return_value = mock_response
+
+        mock_registry.detect.return_value = "dspy"
+        mock_adapter_cls = Mock(return_value=mock_adapter)
+        mock_registry.get_adapter.return_value = mock_adapter_cls
+
+        pii_llm = PiiLLM()
+        result = pii_llm.generate("Test text")
+
+        # Should return empty list instead of raising
+        assert result == []
+
+        # Should log debug message
+        mock_logger.debug.assert_called_once()
+
+    @patch("despii.detectors.llm.settings")
+    @patch("despii.detectors.llm.LLMRegistry")
+    @patch("despii.detectors.llm.logger")
+    def test_generate_handles_incomplete_json(self, mock_logger, mock_registry, mock_settings):
+        """Test that generate handles incomplete/malformed JSON."""
+        mock_model = Mock()
+        mock_settings.local_lm = mock_model
+
+        # Mock adapter that returns incomplete JSON
+        mock_adapter = Mock(spec=LLMAdapter)
+        mock_response = Mock(spec=LLMResponse)
+        mock_response.raw = ['[{"pii_str": "John", "label": "Name"']  # Missing closing brackets
+        mock_adapter.generate.return_value = mock_response
+
+        mock_registry.detect.return_value = "dspy"
+        mock_adapter_cls = Mock(return_value=mock_adapter)
+        mock_registry.get_adapter.return_value = mock_adapter_cls
+
+        pii_llm = PiiLLM()
+        result = pii_llm.generate("Test text")
+
+        # Should return empty list instead of raising
+        assert result == []
+
+        # Should log debug message with the response
+        mock_logger.debug.assert_called_once()
+        log_call_args = mock_logger.debug.call_args
+        assert "Failed to parse LLM response as JSON" in log_call_args.args[0]
+
+    @patch("despii.detectors.llm.settings")
+    @patch("despii.detectors.llm.LLMRegistry")
+    @patch("despii.detectors.llm.logger")
+    def test_generate_handles_json_with_text_prefix(self, mock_logger, mock_registry, mock_settings):
+        """Test that generate handles JSON with explanatory text prefix."""
+        mock_model = Mock()
+        mock_settings.local_lm = mock_model
+
+        # Mock adapter that returns JSON with explanatory text
+        mock_adapter = Mock(spec=LLMAdapter)
+        mock_response = Mock(spec=LLMResponse)
+        mock_response.raw = ['Here is the output: [{"pii_str": "John", "label": "Name"}]']
+        mock_adapter.generate.return_value = mock_response
+
+        mock_registry.detect.return_value = "dspy"
+        mock_adapter_cls = Mock(return_value=mock_adapter)
+        mock_registry.get_adapter.return_value = mock_adapter_cls
+
+        pii_llm = PiiLLM()
+        result = pii_llm.generate("Test text")
+
+        # Should return empty list instead of raising
+        assert result == []
+
+        # Should log debug message
+        mock_logger.debug.assert_called_once()
+
 
 class TestLLMPass:
     """Test llm_pass function."""

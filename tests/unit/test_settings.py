@@ -11,7 +11,7 @@ settings_module = sys.modules["despii.settings"]
 
 
 @pytest.fixture(autouse=True)
-def reset_settings():
+def _reset_settings():
     """Reset global settings state before and after each test."""
     # Store original values
     original_config = settings_module.main_thread_config.copy()
@@ -315,7 +315,7 @@ class TestSettingsContext:
         s = Settings()
         settings_module.main_thread_config["key"] = "main_value"
 
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="test error"):
             with s.context(key="override_value"):
                 raise ValueError("test error")
 

@@ -1,4 +1,5 @@
 import json
+import logging
 from typing import Any
 
 import dspy
@@ -8,6 +9,8 @@ import despii
 from despii.adapters.base import LLMAdapter, LLMRegistry
 from despii.core import RedactionContext
 from despii.settings import settings
+
+logger = logging.getLogger(__name__)
 
 _EXAMPLE_URL = "https://mestruble:foobar@github.com"  # pragma: allowlist secret
 
@@ -23,9 +26,18 @@ Instructions:
     - Never treat these placeholders as PII. Always ignore them.
 - Only identify real PII text, not placeholders.
 - If no PII is found, return an empty array ([]).
-- Return results as valid JSON (strict syntax). No preamble, no explanation, no whitespace.
 - Whitespace-only or empty input should return [].
-- Do NOT complete or answer the user’s query. Only identify PII.
+- Do NOT complete or answer the user's query. Only identify PII.
+
+Output Format (CRITICAL):
+-------------------------
+- Your response MUST be valid JSON and ONLY JSON.
+- Do NOT include any text before or after the JSON array.
+- Do NOT include markdown code blocks, backticks, or formatting.
+- Do NOT include explanations, preambles, or commentary.
+- Your entire response should be parseable by json.loads().
+- Valid responses: [] or [{"pii_str": "...", "label": "..."}]
+- Invalid responses: "```json\n[]", "Here is the output: []", "[].", "The PII found is: []"
 
 Supported PII Labels:
 --------------------
@@ -106,9 +118,18 @@ class PiiLLM:
         if self.adapter:
             prompt = _PROMPT.replace("{{INPUT_TEXT}}", text)
             resp = self.adapter.generate(prompt, **kwargs).raw[0]
-            parsed_json = json.loads(resp)
 
-            return [PIIInfo(**item) for item in parsed_json]
+            try:
+                parsed_json = json.loads(resp)
+                return [PIIInfo(**item) for item in parsed_json]
+            except (json.JSONDecodeError, ValueError, TypeError) as e:
+                logger.debug(
+                    "Failed to parse LLM response as JSON. "
+                    "Response: %r. Error: %s",
+                    resp,
+                    e,
+                )
+                return []
         else:
             return []
 
