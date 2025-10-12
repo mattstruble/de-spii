@@ -93,7 +93,7 @@ output: [{"pii_str": "Alice Chen", "label": "Name"}, {"pii_str": "555-123-4567",
 text: Help me debug this query {{EXAMPLE_URL}} is returning null.
 output:  [{"pii_str": "mestruble", "Username": "Name"}, {"pii_str": "foobar", "label": "Secret"}]
 
-input:
+Input:
 ------
 text: {{INPUT_TEXT}}
 """.replace("{{EXAMPLE_URL}}", _EXAMPLE_URL)
@@ -111,9 +111,13 @@ def _clean_llm_response(response: str) -> str:
         Cleaned string containing only JSON
 
     """
+    original_response = response
     response = re.sub(r"```(?:json)?\s*\n?", "", response)
     response = re.sub(r"\n?```\s*$", "", response)
     response = response.strip()
+
+    if original_response != response:
+        logger.debug("Cleaned markdown formatting from LLM response")
 
     return response
 
@@ -126,16 +130,26 @@ class PIIInfo(BaseModel):
 class PiiLLM:
     def __init__(self) -> None:
         self.model = settings.local_lm
+        logger.debug("Initializing PiiLLM with model: %s", type(self.model).__name__ if self.model else "None")
 
         self.framework = LLMRegistry.detect(self.model) if self.model else None
+        if self.framework:
+            logger.info("Detected LLM framework: %s", self.framework)
+        else:
+            logger.info("No LLM framework detected, LLM detection will not function")
 
         adapter_cls = LLMRegistry.get_adapter(self.framework) if self.framework else None
 
         self.adapter: LLMAdapter = adapter_cls(self.model) if adapter_cls else None
+        if self.adapter:
+            logger.debug("LLM adapter initialized: %s", type(self.adapter).__name__)
+        else:
+            logger.warning("No LLM adapter available")
 
     def generate(self, text: str, **kwargs: Any) -> list[PIIInfo]:  # noqa: ANN401
         """Generate PII detections from text."""
         if self.adapter:
+            logger.debug("Starting LLM PII detection (text length: %d chars)", len(text))
             prompt = _PROMPT.replace("{{INPUT_TEXT}}", text)
             resp = self.adapter.generate(prompt, **kwargs).raw[0]
 
@@ -143,7 +157,12 @@ class PiiLLM:
 
             try:
                 parsed_json = json.loads(cleaned_resp)
-                return [PIIInfo(**item) for item in parsed_json]
+                pii_items = [PIIInfo(**item) for item in parsed_json]
+                logger.info("LLM detected %d PII entities", len(pii_items))
+                if pii_items:
+                    labels = [item.label for item in pii_items]
+                    logger.debug("Detected PII labels: %s", labels)
+                return pii_items
             except (json.JSONDecodeError, ValueError, TypeError) as e:
                 logger.debug(
                     "Failed to parse LLM response as JSON. Response: %r. Error: %s",
@@ -152,6 +171,7 @@ class PiiLLM:
                 )
                 return []
         else:
+            logger.debug("No adapter available, returning empty PII list")
             return []
 
 
@@ -161,13 +181,17 @@ def _llm() -> PiiLLM:
 
 
 def llm_pass(ctx: RedactionContext) -> RedactionContext:
+    logger.debug("Starting LLM pass (text length: %d chars)", len(ctx.text))
     llm = _llm()
 
     resp = llm.generate(ctx.text)
 
+    redacted_count = 0
     for pii in resp:
         ctx.redact(pii.pii_str, pii.label)
+        redacted_count += 1
 
+    logger.info("LLM pass completed, redacted %d PII items", redacted_count)
     return ctx
 
 

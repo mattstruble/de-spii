@@ -1,6 +1,9 @@
+import logging
 import re
 
 from despii.core import RedactionContext
+
+logger = logging.getLogger(__name__)
 
 REGEX_PATTERNS = {
     "EMAIL": re.compile(r"\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[A-Za-z]{2,}\b"),
@@ -22,8 +25,16 @@ REGEX_PATTERNS = {
 
 
 def regex_pass(ctx: RedactionContext) -> RedactionContext:
-    for label, pattern in REGEX_PATTERNS.items():
-        for match in pattern.findall(ctx.text):
-            ctx.redact(match, label)
+    logger.debug("Starting regex PII detection (text length: %d chars)", len(ctx.text))
+    total_matches = 0
 
+    for label, pattern in REGEX_PATTERNS.items():
+        matches = pattern.findall(ctx.text)
+        if matches:
+            logger.debug("Found %d matches for pattern %s", len(matches), label)
+            for match in matches:
+                ctx.redact(match, label)
+                total_matches += 1
+
+    logger.info("Regex detector found %d PII matches", total_matches)
     return ctx

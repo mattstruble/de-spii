@@ -362,11 +362,13 @@ class TestPiiLLM:
         # Should return empty list instead of raising
         assert result == []
 
-        # Should log debug message
-        mock_logger.debug.assert_called_once()
-        log_call_args = mock_logger.debug.call_args
-        assert "Failed to parse LLM response as JSON" in log_call_args.args[0]
-        assert "This is not valid JSON" in str(log_call_args.args[1])
+        # Should log debug message about failed JSON parsing
+        debug_calls = [call.args for call in mock_logger.debug.call_args_list]
+        failed_parse_calls = [
+            call for call in debug_calls if "Failed to parse LLM response as JSON" in call[0]
+        ]
+        assert len(failed_parse_calls) == 1
+        assert "This is not valid JSON" in str(failed_parse_calls[0][1])
 
     @patch("despii.detectors.llm.settings")
     @patch("despii.detectors.llm.LLMRegistry")
@@ -417,10 +419,12 @@ class TestPiiLLM:
         # Should return empty list instead of raising
         assert result == []
 
-        # Should log debug message with the response
-        mock_logger.debug.assert_called_once()
-        log_call_args = mock_logger.debug.call_args
-        assert "Failed to parse LLM response as JSON" in log_call_args.args[0]
+        # Should log debug message about failed JSON parsing
+        debug_calls = [call.args for call in mock_logger.debug.call_args_list]
+        failed_parse_calls = [
+            call for call in debug_calls if "Failed to parse LLM response as JSON" in call[0]
+        ]
+        assert len(failed_parse_calls) == 1
 
     @patch("despii.detectors.llm.settings")
     @patch("despii.detectors.llm.LLMRegistry")
@@ -446,8 +450,12 @@ class TestPiiLLM:
         # Should return empty list instead of raising
         assert result == []
 
-        # Should log debug message
-        mock_logger.debug.assert_called_once()
+        # Should log debug message about failed JSON parsing
+        debug_calls = [call.args for call in mock_logger.debug.call_args_list]
+        failed_parse_calls = [
+            call for call in debug_calls if "Failed to parse LLM response as JSON" in call[0]
+        ]
+        assert len(failed_parse_calls) == 1
 
 
 class TestLLMPass:

@@ -1,6 +1,9 @@
 import functools
+import logging
 from dataclasses import dataclass
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -39,6 +42,7 @@ class LLMRegistry:
         :param name: Framework name
         :param adapter: Adapter instance
         """
+        logger.debug("Registering adapter for framework: %s", name)
         cls._registry[name.lower()] = adapter
 
     @classmethod
@@ -48,7 +52,12 @@ class LLMRegistry:
         :param name: Framework name
         :return: Adapter instance or None
         """
-        return cls._registry.get(name.lower())
+        adapter = cls._registry.get(name.lower())
+        if adapter:
+            logger.debug("Retrieved adapter for framework: %s", name)
+        else:
+            logger.warning("No adapter found for framework: %s", name)
+        return adapter
 
     @classmethod
     @functools.cache
@@ -59,6 +68,10 @@ class LLMRegistry:
         :return: Framework name or None
         """
         mod = model.__class__.__module__.lower()
+        logger.debug("Detecting framework for model from module: %s", mod)
         for key in cls._registry.keys():
             if key in mod:
+                logger.info("Detected framework: %s", key)
                 return key
+        logger.warning("Could not detect framework for model: %s", model.__class__.__name__)
+        return None
