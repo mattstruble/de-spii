@@ -111,11 +111,8 @@ def _clean_llm_response(response: str) -> str:
         Cleaned string containing only JSON
 
     """
-    # Remove markdown code blocks (```json...``` or ```...```)
     response = re.sub(r"```(?:json)?\s*\n?", "", response)
     response = re.sub(r"\n?```\s*$", "", response)
-
-    # Strip leading/trailing whitespace
     response = response.strip()
 
     return response
@@ -142,7 +139,6 @@ class PiiLLM:
             prompt = _PROMPT.replace("{{INPUT_TEXT}}", text)
             resp = self.adapter.generate(prompt, **kwargs).raw[0]
 
-            # Clean response to remove markdown code blocks and extra formatting
             cleaned_resp = _clean_llm_response(resp)
 
             try:
