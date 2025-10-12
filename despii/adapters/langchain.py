@@ -1,9 +1,12 @@
+from typing import Any
+
 from despii.adapters.base import LLMAdapter, LLMResponse
 from despii.adapters.errors import UnsupportedModelInterfaceError
 
 
 class LangChainAdapter(LLMAdapter):
-    def generate(self, prompt: str, **kwargs) -> LLMResponse:
+    def generate(self, prompt: str, **kwargs: Any) -> LLMResponse:  # noqa: ANN401
+        """Generate a response using LangChain model."""
         if hasattr(self.model, "invoke"):
             raw = self.model.invoke(prompt, **kwargs)
         elif hasattr(self.model, "predict"):

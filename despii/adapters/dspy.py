@@ -1,4 +1,4 @@
-from typing import override
+from typing import Any, override
 
 from despii.adapters.base import LLMAdapter, LLMResponse
 from despii.adapters.errors import UnsupportedModelInterfaceError
@@ -6,7 +6,7 @@ from despii.adapters.errors import UnsupportedModelInterfaceError
 
 class DSPyAdapter(LLMAdapter):
     @override
-    def generate(self, prompt: str, **kwargs) -> LLMResponse:
+    def generate(self, prompt: str, **kwargs: Any) -> LLMResponse:  # noqa: ANN401
         if callable(self.model):
             raw = self.model(prompt)
         elif hasattr(self.model, "generate_text"):
