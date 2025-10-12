@@ -1,3 +1,4 @@
+import logging
 import subprocess  # nosec B404
 import sys
 from enum import auto
@@ -7,6 +8,8 @@ import spacy
 
 from despii.core import RedactionContext
 from despii.util import StrEnum, detect_system_lang
+
+logger = logging.getLogger(__name__)
 
 
 class Labels(StrEnum):
@@ -54,12 +57,17 @@ _PII_LABELS = {
 
 @lru_cache(maxsize=1)
 def _load_spacy_model(model_name: str) -> spacy.language.Language:
+    logger.debug("Loading spaCy model: %s", model_name)
     try:
-        return spacy.load(model_name)
-    except Exception:
+        model = spacy.load(model_name)
+        logger.info("Successfully loaded spaCy model: %s", model_name)
+        return model
+    except Exception as e:
+        logger.warning("spaCy model %s not found, downloading: %s", model_name, e)
         _ = subprocess.check_call(
             [sys.executable, "-m", "spacy", "download", model_name]  # nosec B603
         )
+        logger.info("Downloaded spaCy model: %s", model_name)
         return spacy.load(model_name)
 
 
@@ -104,17 +112,24 @@ def _spacy_model_for_lang(lang_code: str | None) -> str:
 @lru_cache(maxsize=1)
 def spacy_model() -> spacy.language.Language:
     lang = detect_system_lang()
+    logger.debug("Detected system language: %s", lang)
     model_name = _spacy_model_for_lang(lang)
+    logger.debug("Selected spaCy model for language: %s", model_name)
     return _load_spacy_model(model_name)
 
 
 def spacy_pass(ctx: RedactionContext) -> RedactionContext:
+    logger.debug("Starting spaCy PII detection (text length: %d chars)", len(ctx.text))
     nlp = spacy_model()
     doc = nlp(ctx.text)
 
+    entity_count = 0
     for ent in doc.ents:
         label = ent.label_
         if label in _PII_LABELS:
+            logger.debug("Found PII entity with label: %s", label)
             ctx.redact(ent.text, label)
+            entity_count += 1
 
+    logger.info("spaCy detected %d PII entities", entity_count)
     return ctx
