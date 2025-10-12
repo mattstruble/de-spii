@@ -1,9 +1,10 @@
-import json
+from unittest.mock import Mock, patch
+
 import pytest
-from unittest.mock import Mock, patch, MagicMock
+from pydantic import ValidationError
 
 from despii.adapters.base import LLMAdapter, LLMResponse
-from despii.detectors.llm import PiiLLM, PIIInfo, llm_pass, _llm
+from despii.detectors.llm import PIIInfo, PiiLLM, _llm, llm_pass
 
 
 class TestPIIInfo:
@@ -17,7 +18,7 @@ class TestPIIInfo:
 
     def test_pii_info_validation(self):
         """Test that PIIInfo validates required fields."""
-        with pytest.raises(Exception):  # Pydantic validation error
+        with pytest.raises(ValidationError):
             PIIInfo(pii_str="test")  # Missing label
 
 
@@ -198,6 +199,96 @@ class TestPiiLLM:
         assert call_args.kwargs.get("temperature") == 0.7
         assert call_args.kwargs.get("max_tokens") == 100
 
+    @patch("despii.detectors.llm.settings")
+    @patch("despii.detectors.llm.LLMRegistry")
+    def test_generate_injects_text_into_prompt(self, mock_registry, mock_settings):
+        """Test that generate correctly injects input text into the prompt."""
+        mock_model = Mock()
+        mock_settings.local_lm = mock_model
+
+        mock_adapter = Mock(spec=LLMAdapter)
+        mock_response = Mock(spec=LLMResponse)
+        mock_response.raw = ["[]"]
+        mock_adapter.generate.return_value = mock_response
+
+        mock_registry.detect.return_value = "dspy"
+        mock_adapter_cls = Mock(return_value=mock_adapter)
+        mock_registry.get_adapter.return_value = mock_adapter_cls
+
+        pii_llm = PiiLLM()
+        test_text = "My name is Alice and my email is alice@example.com"
+        pii_llm.generate(test_text)
+
+        # Verify adapter.generate was called with a prompt containing the input text
+        mock_adapter.generate.assert_called_once()
+        call_args = mock_adapter.generate.call_args
+        prompt = call_args.args[0]
+
+        # Check that the input text appears in the prompt
+        assert test_text in prompt
+        # Check that it appears in the expected format (after "text: ")
+        assert f"text: {test_text}" in prompt
+        # Verify the placeholder is replaced (should not contain {{INPUT_TEXT}})
+        assert "{{INPUT_TEXT}}" not in prompt
+
+    @patch("despii.detectors.llm.settings")
+    @patch("despii.detectors.llm.LLMRegistry")
+    def test_generate_handles_multiple_calls_with_different_texts(self, mock_registry, mock_settings):
+        """Test that generate correctly handles multiple calls with different input texts."""
+        mock_model = Mock()
+        mock_settings.local_lm = mock_model
+
+        mock_adapter = Mock(spec=LLMAdapter)
+        mock_response = Mock(spec=LLMResponse)
+        mock_response.raw = ["[]"]
+        mock_adapter.generate.return_value = mock_response
+
+        mock_registry.detect.return_value = "dspy"
+        mock_adapter_cls = Mock(return_value=mock_adapter)
+        mock_registry.get_adapter.return_value = mock_adapter_cls
+
+        pii_llm = PiiLLM()
+
+        # First call with text1
+        text1 = "First test with name John"
+        pii_llm.generate(text1)
+
+        first_call_args = mock_adapter.generate.call_args
+        first_prompt = first_call_args.args[0]
+        assert text1 in first_prompt
+        assert f"text: {text1}" in first_prompt
+        assert "{{INPUT_TEXT}}" not in first_prompt
+
+        # Second call with text2
+        text2 = "Second test with email bob@example.com"
+        pii_llm.generate(text2)
+
+        second_call_args = mock_adapter.generate.call_args
+        second_prompt = second_call_args.args[0]
+        assert text2 in second_prompt
+        assert f"text: {text2}" in second_prompt
+        assert "{{INPUT_TEXT}}" not in second_prompt
+
+        # Verify the first text is NOT in the second prompt (no pollution)
+        assert text1 not in second_prompt
+
+        # Third call with text3
+        text3 = "Third test with phone 555-1234"
+        pii_llm.generate(text3)
+
+        third_call_args = mock_adapter.generate.call_args
+        third_prompt = third_call_args.args[0]
+        assert text3 in third_prompt
+        assert f"text: {text3}" in third_prompt
+        assert "{{INPUT_TEXT}}" not in third_prompt
+
+        # Verify previous texts are NOT in the third prompt
+        assert text1 not in third_prompt
+        assert text2 not in third_prompt
+
+        # Verify all three calls happened
+        assert mock_adapter.generate.call_count == 3
+
 
 class TestLLMPass:
     """Test llm_pass function."""
@@ -275,4 +366,3 @@ class TestLLMFactory:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
-

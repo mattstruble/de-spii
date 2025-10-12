@@ -22,10 +22,9 @@ class TestUnsupportedModelInterfaceError:
         with pytest.raises(DeSpiiError):
             raise UnsupportedModelInterfaceError("Test error")
 
-    def test_error_can_be_caught_as_exception(self):
-        """Test that the error can be caught as generic Exception."""
-        with pytest.raises(Exception):
-            raise UnsupportedModelInterfaceError("Test error")
+    def test_error_inherits_from_exception(self):
+        """Test that the error inherits from Exception."""
+        assert issubclass(UnsupportedModelInterfaceError, Exception)
 
     def test_error_with_empty_message(self):
         """Test that the error works with an empty message."""
@@ -35,4 +34,3 @@ class TestUnsupportedModelInterfaceError:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
-

@@ -1,18 +1,19 @@
-import pytest
 from unittest.mock import Mock
 
+import pytest
+
 from despii.adapters.base import LLMResponse
-from despii.adapters.langgraph import LangGraphAdapter
 from despii.adapters.errors import UnsupportedModelInterfaceError
+from despii.adapters.langchain import LangChainAdapter
 
 
-class TestLangGraphAdapter:
-    """Test LangGraphAdapter class."""
+class TestLangChainAdapter:
+    """Test LangChainAdapter class."""
 
     def test_adapter_initialization(self):
-        """Test that LangGraphAdapter can be initialized with a model."""
+        """Test that LangChainAdapter can be initialized with a model."""
         model = Mock()
-        adapter = LangGraphAdapter(model)
+        adapter = LangChainAdapter(model)
         assert adapter.model is model
 
     def test_generate_with_invoke_method_string_response(self):
@@ -20,14 +21,14 @@ class TestLangGraphAdapter:
         model = Mock()
         model.invoke = Mock(return_value="Invoke response")
 
-        adapter = LangGraphAdapter(model)
-        response = adapter.generate("test prompt")
+        adapter = LangChainAdapter(model)
+        response = adapter.generate("test prompt", temperature=0.7)
 
-        model.invoke.assert_called_once_with("test prompt")
+        model.invoke.assert_called_once_with("test prompt", temperature=0.7)
         assert isinstance(response, LLMResponse)
         assert response.text == "Invoke response"
         assert response.raw == "Invoke response"
-        assert response.framework == "langgraph"
+        assert response.framework == "langchain"
 
     def test_generate_with_invoke_method_object_response(self):
         """Test generate with model.invoke() returning an object with .content."""
@@ -36,40 +37,72 @@ class TestLangGraphAdapter:
         response_obj.content = "Content from object"
         model.invoke = Mock(return_value=response_obj)
 
-        adapter = LangGraphAdapter(model)
+        adapter = LangChainAdapter(model)
         response = adapter.generate("test prompt")
 
         assert response.text == "Content from object"
         assert response.raw is response_obj
-        assert response.framework == "langgraph"
+        assert response.framework == "langchain"
+
+    def test_generate_with_predict_method(self):
+        """Test generate with model.predict() method."""
+        model = Mock()
+        model.predict = Mock(return_value="Predict response")
+        # Remove invoke to test predict path
+        if hasattr(model, "invoke"):
+            delattr(model, "invoke")
+
+        adapter = LangChainAdapter(model)
+        response = adapter.generate("test prompt", temperature=0.5)
+
+        model.predict.assert_called_once_with("test prompt", temperature=0.5)
+        assert response.text == "Predict response"
+        assert response.framework == "langchain"
 
     def test_generate_with_callable_fallback(self):
         """Test generate with callable model as fallback."""
         model = Mock()
         model.return_value = "Callable response"
-        # Remove invoke to test callable path
+        # Remove invoke and predict
         if hasattr(model, "invoke"):
             delattr(model, "invoke")
+        if hasattr(model, "predict"):
+            delattr(model, "predict")
 
-        adapter = LangGraphAdapter(model)
+        adapter = LangChainAdapter(model)
         response = adapter.generate("test prompt")
 
         model.assert_called_once_with("test prompt")
         assert response.text == "Callable response"
-        assert response.framework == "langgraph"
+        assert response.framework == "langchain"
 
-    def test_generate_prefers_invoke_over_callable(self):
-        """Test that invoke is preferred when both are available."""
+    def test_generate_prefers_invoke_over_predict(self):
+        """Test that invoke is preferred when both invoke and predict are available."""
         model = Mock()
         model.invoke = Mock(return_value="Via invoke")
-        model.return_value = "Via callable"
+        model.predict = Mock(return_value="Via predict")
 
-        adapter = LangGraphAdapter(model)
+        adapter = LangChainAdapter(model)
         response = adapter.generate("test prompt")
 
         model.invoke.assert_called_once()
-        model.assert_not_called()
+        model.predict.assert_not_called()
         assert response.text == "Via invoke"
+
+    def test_generate_prefers_predict_over_callable(self):
+        """Test that predict is preferred over callable."""
+        model = Mock()
+        model.return_value = "Via callable"
+        model.predict = Mock(return_value="Via predict")
+        if hasattr(model, "invoke"):
+            delattr(model, "invoke")
+
+        adapter = LangChainAdapter(model)
+        response = adapter.generate("test prompt")
+
+        model.predict.assert_called_once()
+        model.assert_not_called()
+        assert response.text == "Via predict"
 
     def test_generate_with_unsupported_model_interface(self):
         """Test that generate raises error for unsupported model interface."""
@@ -78,32 +111,32 @@ class TestLangGraphAdapter:
             pass
 
         model = UnsupportedModel()
-        adapter = LangGraphAdapter(model)
+        adapter = LangChainAdapter(model)
 
         with pytest.raises(UnsupportedModelInterfaceError) as exc_info:
             adapter.generate("test prompt")
 
-        assert "does not implement 'invoke' or '__call__'" in str(exc_info.value)
+        assert "does not implement 'invoke', 'predict', or '__call__'" in str(exc_info.value)
 
-    def test_generate_extracts_model_name_from_name_attribute(self):
-        """Test that generate extracts model_name from model.name attribute."""
+    def test_generate_extracts_model_name(self):
+        """Test that generate extracts model_name from model.model_name attribute."""
         model = Mock()
         model.invoke = Mock(return_value="response")
-        model.name = "claude-3-opus"
+        model.model_name = "gpt-4"
 
-        adapter = LangGraphAdapter(model)
+        adapter = LangChainAdapter(model)
         response = adapter.generate("test prompt")
 
-        assert response.model_name == "claude-3-opus"
+        assert response.model_name == "gpt-4"
 
     def test_generate_model_name_none_when_not_present(self):
-        """Test that model_name is None when model doesn't have name attribute."""
+        """Test that model_name is None when model doesn't have model_name attribute."""
         model = Mock()
         model.invoke = Mock(return_value="response")
-        if hasattr(model, "name"):
-            delattr(model, "name")
+        if hasattr(model, "model_name"):
+            delattr(model, "model_name")
 
-        adapter = LangGraphAdapter(model)
+        adapter = LangChainAdapter(model)
         response = adapter.generate("test prompt")
 
         assert response.model_name is None
@@ -119,26 +152,25 @@ class TestLangGraphAdapter:
         response_obj = ResponseObj()
         model.invoke = Mock(return_value=response_obj)
 
-        adapter = LangGraphAdapter(model)
+        adapter = LangChainAdapter(model)
         response = adapter.generate("test prompt")
 
         # Should fall back to str(raw)
         assert response.text == "String representation"
         assert response.raw is response_obj
 
-    def test_generate_does_not_pass_kwargs(self):
-        """Test that LangGraphAdapter does not pass kwargs to invoke (per implementation)."""
+    def test_generate_passes_kwargs_to_invoke(self):
+        """Test that kwargs are properly passed to invoke method."""
         model = Mock()
         model.invoke = Mock(return_value="response")
 
-        adapter = LangGraphAdapter(model)
-        # Note: kwargs are accepted but not passed in the current implementation
-        adapter.generate("test prompt", temperature=0.8)
+        adapter = LangChainAdapter(model)
+        adapter.generate("test prompt", temperature=0.8, max_tokens=100, top_p=0.9)
 
-        # Should only be called with prompt, no kwargs
-        model.invoke.assert_called_once_with("test prompt")
+        model.invoke.assert_called_once_with(
+            "test prompt", temperature=0.8, max_tokens=100, top_p=0.9
+        )
 
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
-

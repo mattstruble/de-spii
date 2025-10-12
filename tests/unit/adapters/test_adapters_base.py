@@ -1,5 +1,6 @@
-import pytest
 from unittest.mock import Mock
+
+import pytest
 
 from despii.adapters.base import LLMAdapter, LLMRegistry, LLMResponse
 
@@ -12,7 +13,7 @@ class TestLLMResponse:
         response = LLMResponse(text="Hello world")
         assert response.text == "Hello world"
         assert response.raw is None
-        assert response.framework == ""
+        assert not response.framework
         assert response.model_name is None
 
     def test_llm_response_initialization_full(self):
@@ -140,4 +141,3 @@ class TestLLMRegistry:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
-
