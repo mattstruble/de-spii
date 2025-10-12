@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 from typing import Any
 
 import dspy
@@ -98,6 +99,28 @@ text: {{INPUT_TEXT}}
 """.replace("{{EXAMPLE_URL}}", _EXAMPLE_URL)
 
 
+def _clean_llm_response(response: str) -> str:
+    """Clean LLM response by removing markdown code blocks and extra text.
+
+    Args:
+    ----
+        response: Raw LLM response string
+
+    Returns:
+    -------
+        Cleaned string containing only JSON
+
+    """
+    # Remove markdown code blocks (```json...``` or ```...```)
+    response = re.sub(r"```(?:json)?\s*\n?", "", response)
+    response = re.sub(r"\n?```\s*$", "", response)
+
+    # Strip leading/trailing whitespace
+    response = response.strip()
+
+    return response
+
+
 class PIIInfo(BaseModel):
     pii_str: str
     label: str
@@ -119,13 +142,15 @@ class PiiLLM:
             prompt = _PROMPT.replace("{{INPUT_TEXT}}", text)
             resp = self.adapter.generate(prompt, **kwargs).raw[0]
 
+            # Clean response to remove markdown code blocks and extra formatting
+            cleaned_resp = _clean_llm_response(resp)
+
             try:
-                parsed_json = json.loads(resp)
+                parsed_json = json.loads(cleaned_resp)
                 return [PIIInfo(**item) for item in parsed_json]
             except (json.JSONDecodeError, ValueError, TypeError) as e:
                 logger.debug(
-                    "Failed to parse LLM response as JSON. "
-                    "Response: %r. Error: %s",
+                    "Failed to parse LLM response as JSON. Response: %r. Error: %s",
                     resp,
                     e,
                 )
@@ -158,7 +183,7 @@ if __name__ == "__main__":
         enable_memory_cache=False,
     )
 
-    local_lm = dspy.LM(model="ollama/llama3.1:8b", api_key="", max_tokens=4000)
+    local_lm = dspy.LM(model="ollama/llama3.1:8b", api_key="", max_tokens=8000)
     despii.configure(local_lm=local_lm)
 
     prompts = [
@@ -190,8 +215,3 @@ if __name__ == "__main__":
         ctx = RedactionContext(text=prompt)
         print("Initial Prompt:", prompt)
         print("Resp:", llm_pass(ctx).text, "\n")
-
-    with despii.context(local_lm=None):
-        for prompt in prompts:
-            ctx = RedactionContext(text=prompt)
-            print("resp", llm_pass(ctx).text, "\n")

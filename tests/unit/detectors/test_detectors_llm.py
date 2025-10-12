@@ -4,7 +4,56 @@ import pytest
 from pydantic import ValidationError
 
 from despii.adapters.base import LLMAdapter, LLMResponse
-from despii.detectors.llm import PIIInfo, PiiLLM, _llm, llm_pass
+from despii.detectors.llm import PIIInfo, PiiLLM, _clean_llm_response, _llm, llm_pass
+
+
+class TestCleanLLMResponse:
+    """Test _clean_llm_response helper function."""
+
+    def test_clean_json_markdown_block(self):
+        """Test cleaning JSON wrapped in markdown code blocks."""
+        response = '```json\n[{"pii_str": "John", "label": "Name"}]\n```'
+        cleaned = _clean_llm_response(response)
+        assert cleaned == '[{"pii_str": "John", "label": "Name"}]'
+
+    def test_clean_plain_markdown_block(self):
+        """Test cleaning JSON in plain markdown code blocks (no json language tag)."""
+        response = '```\n[{"pii_str": "John", "label": "Name"}]\n```'
+        cleaned = _clean_llm_response(response)
+        assert cleaned == '[{"pii_str": "John", "label": "Name"}]'
+
+    def test_clean_already_clean_json(self):
+        """Test that already clean JSON is unchanged."""
+        response = '[{"pii_str": "John", "label": "Name"}]'
+        cleaned = _clean_llm_response(response)
+        assert cleaned == '[{"pii_str": "John", "label": "Name"}]'
+
+    def test_clean_empty_array(self):
+        """Test cleaning empty JSON array."""
+        response = '```json\n[]\n```'
+        cleaned = _clean_llm_response(response)
+        assert cleaned == '[]'
+
+    def test_clean_with_extra_whitespace(self):
+        """Test cleaning with extra whitespace."""
+        response = '  \n```json\n[{"pii_str": "John", "label": "Name"}]\n```\n  '
+        cleaned = _clean_llm_response(response)
+        assert cleaned == '[{"pii_str": "John", "label": "Name"}]'
+
+    def test_clean_multiline_json(self):
+        """Test cleaning multiline JSON in markdown."""
+        response = '''```json
+[
+  {"pii_str": "John", "label": "Name"},
+  {"pii_str": "john@example.com", "label": "Email"}
+]
+```'''
+        cleaned = _clean_llm_response(response)
+        expected = '''[
+  {"pii_str": "John", "label": "Name"},
+  {"pii_str": "john@example.com", "label": "Email"}
+]'''
+        assert cleaned == expected
 
 
 class TestPIIInfo:
@@ -321,9 +370,8 @@ class TestPiiLLM:
 
     @patch("despii.detectors.llm.settings")
     @patch("despii.detectors.llm.LLMRegistry")
-    @patch("despii.detectors.llm.logger")
-    def test_generate_handles_markdown_json(self, mock_logger, mock_registry, mock_settings):
-        """Test that generate handles JSON wrapped in markdown code blocks."""
+    def test_generate_handles_markdown_json(self, mock_registry, mock_settings):
+        """Test that generate successfully parses JSON wrapped in markdown code blocks."""
         mock_model = Mock()
         mock_settings.local_lm = mock_model
 
@@ -340,11 +388,10 @@ class TestPiiLLM:
         pii_llm = PiiLLM()
         result = pii_llm.generate("Test text")
 
-        # Should return empty list instead of raising
-        assert result == []
-
-        # Should log debug message
-        mock_logger.debug.assert_called_once()
+        # Should successfully parse and return PII (cleaning removes markdown)
+        assert len(result) == 1
+        assert result[0].pii_str == "John"
+        assert result[0].label == "Name"
 
     @patch("despii.detectors.llm.settings")
     @patch("despii.detectors.llm.LLMRegistry")
