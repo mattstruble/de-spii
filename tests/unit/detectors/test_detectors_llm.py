@@ -149,7 +149,7 @@ class TestPiiLLM:
         # Setup adapter mock
         mock_adapter = Mock(spec=LLMAdapter)
         mock_response = Mock(spec=LLMResponse)
-        mock_response.raw = ['[{"pii_str": "John Doe", "label": "Name"}]']
+        mock_response.text = '[{"pii_str": "John Doe", "label": "Name"}]'
         mock_adapter.generate.return_value = mock_response
 
         mock_registry.detect.return_value = "dspy"
@@ -185,7 +185,7 @@ class TestPiiLLM:
 
         mock_adapter = Mock(spec=LLMAdapter)
         mock_response = Mock(spec=LLMResponse)
-        mock_response.raw = ["[]"]
+        mock_response.text = "[]"
         mock_adapter.generate.return_value = mock_response
 
         mock_registry.detect.return_value = "dspy"
@@ -206,9 +206,9 @@ class TestPiiLLM:
 
         mock_adapter = Mock(spec=LLMAdapter)
         mock_response = Mock(spec=LLMResponse)
-        mock_response.raw = [
+        mock_response.text = (
             '[{"pii_str": "John Doe", "label": "Name"}, {"pii_str": "john@example.com", "label": "Email"}]'
-        ]
+        )
         mock_adapter.generate.return_value = mock_response
 
         mock_registry.detect.return_value = "dspy"
@@ -233,7 +233,7 @@ class TestPiiLLM:
 
         mock_adapter = Mock(spec=LLMAdapter)
         mock_response = Mock(spec=LLMResponse)
-        mock_response.raw = ["[]"]
+        mock_response.text = "[]"
         mock_adapter.generate.return_value = mock_response
 
         mock_registry.detect.return_value = "dspy"
@@ -257,7 +257,7 @@ class TestPiiLLM:
 
         mock_adapter = Mock(spec=LLMAdapter)
         mock_response = Mock(spec=LLMResponse)
-        mock_response.raw = ["[]"]
+        mock_response.text = "[]"
         mock_adapter.generate.return_value = mock_response
 
         mock_registry.detect.return_value = "dspy"
@@ -289,7 +289,7 @@ class TestPiiLLM:
 
         mock_adapter = Mock(spec=LLMAdapter)
         mock_response = Mock(spec=LLMResponse)
-        mock_response.raw = ["[]"]
+        mock_response.text = "[]"
         mock_adapter.generate.return_value = mock_response
 
         mock_registry.detect.return_value = "dspy"
@@ -349,7 +349,7 @@ class TestPiiLLM:
         # Mock adapter that returns invalid JSON
         mock_adapter = Mock(spec=LLMAdapter)
         mock_response = Mock(spec=LLMResponse)
-        mock_response.raw = ["This is not valid JSON"]
+        mock_response.text = "This is not valid JSON"
         mock_adapter.generate.return_value = mock_response
 
         mock_registry.detect.return_value = "dspy"
@@ -362,10 +362,10 @@ class TestPiiLLM:
         # Should return empty list instead of raising
         assert result == []
 
-        # Should log debug message about failed JSON parsing
-        debug_calls = [call.args for call in mock_logger.debug.call_args_list]
+        # Should log warning message about failed JSON parsing
+        warning_calls = [call.args for call in mock_logger.warning.call_args_list]
         failed_parse_calls = [
-            call for call in debug_calls if "Failed to parse LLM response as JSON" in call[0]
+            call for call in warning_calls if "Failed to parse LLM response as JSON" in call[0]
         ]
         assert len(failed_parse_calls) == 1
         assert "This is not valid JSON" in str(failed_parse_calls[0][1])
@@ -380,7 +380,7 @@ class TestPiiLLM:
         # Mock adapter that returns JSON in markdown
         mock_adapter = Mock(spec=LLMAdapter)
         mock_response = Mock(spec=LLMResponse)
-        mock_response.raw = ['```json\n[{"pii_str": "John", "label": "Name"}]\n```']
+        mock_response.text = '```json\n[{"pii_str": "John", "label": "Name"}]\n```'
         mock_adapter.generate.return_value = mock_response
 
         mock_registry.detect.return_value = "dspy"
@@ -406,7 +406,7 @@ class TestPiiLLM:
         # Mock adapter that returns incomplete JSON
         mock_adapter = Mock(spec=LLMAdapter)
         mock_response = Mock(spec=LLMResponse)
-        mock_response.raw = ['[{"pii_str": "John", "label": "Name"']  # Missing closing brackets
+        mock_response.text = '[{"pii_str": "John", "label": "Name"'  # Missing closing brackets
         mock_adapter.generate.return_value = mock_response
 
         mock_registry.detect.return_value = "dspy"
@@ -419,10 +419,10 @@ class TestPiiLLM:
         # Should return empty list instead of raising
         assert result == []
 
-        # Should log debug message about failed JSON parsing
-        debug_calls = [call.args for call in mock_logger.debug.call_args_list]
+        # Should log warning message about failed JSON parsing
+        warning_calls = [call.args for call in mock_logger.warning.call_args_list]
         failed_parse_calls = [
-            call for call in debug_calls if "Failed to parse LLM response as JSON" in call[0]
+            call for call in warning_calls if "Failed to parse LLM response as JSON" in call[0]
         ]
         assert len(failed_parse_calls) == 1
 
@@ -437,7 +437,7 @@ class TestPiiLLM:
         # Mock adapter that returns JSON with explanatory text
         mock_adapter = Mock(spec=LLMAdapter)
         mock_response = Mock(spec=LLMResponse)
-        mock_response.raw = ['Here is the output: [{"pii_str": "John", "label": "Name"}]']
+        mock_response.text = 'Here is the output: [{"pii_str": "John", "label": "Name"}]'
         mock_adapter.generate.return_value = mock_response
 
         mock_registry.detect.return_value = "dspy"
@@ -450,10 +450,10 @@ class TestPiiLLM:
         # Should return empty list instead of raising
         assert result == []
 
-        # Should log debug message about failed JSON parsing
-        debug_calls = [call.args for call in mock_logger.debug.call_args_list]
+        # Should log warning message about failed JSON parsing
+        warning_calls = [call.args for call in mock_logger.warning.call_args_list]
         failed_parse_calls = [
-            call for call in debug_calls if "Failed to parse LLM response as JSON" in call[0]
+            call for call in warning_calls if "Failed to parse LLM response as JSON" in call[0]
         ]
         assert len(failed_parse_calls) == 1
 
