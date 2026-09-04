@@ -26,7 +26,7 @@ pytest-cov = "^7.0.0"
 pytest-xdist = "^3.8.0"
 pytest-timeout = "^2.4.0"
 dspy = "^3.0.3"
-langchain = "^0.3.27"
+langchain = "^1.0.0"
 langgraph = "^0.6.10"
 langchain-ollama = "^0.2.0"
 
